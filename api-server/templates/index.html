@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mochi Video Generator</title>
+    <style>
+        /* Inline CSS - no separate file needed */
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea, button { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        button { background: #007bff; color: white; cursor: pointer; border: none; }
+        button:hover { background: #0056b3; }
+        .status { padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .status-processing { background: #fff3cd; border: 1px solid #ffeaa7; }
+        .status-completed { background: #d1edff; border: 1px solid #74b9ff; }
+        .status-failed { background: #f8d7da; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Mochi Video Generator</h1>
+        
+        <!-- Simple HTML form that submits to FastAPI -->
+        <form action="/submit-video" method="post">
+            <div class="form-group">
+                <label for="prompt">Video Prompt:</label>
+                <textarea name="prompt" id="prompt" rows="3" required 
+                          placeholder="Describe the video you want to generate..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="duration">Duration:</label>
+                <select name="duration" id="duration">
+                    <option value="5">5 seconds</option>
+                    <option value="10" selected>10 seconds</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="fps">FPS:</label>
+                <select name="fps" id="fps">
+                    <option value="8">8 FPS</option>
+                    <option value="12" selected>12 FPS</option>
+                    <option value="24">24 FPS</option>
+                </select>
+            </div>
+            
+            <button type="submit">Generate Video</button>
+        </form>
+
+        <!-- Show job status if available -->
+        {% if job %}
+        <div class="status status-{{ job.status }}">
+            <h3>Job Status: {{ job.status.title() }}</h3>
+            <p><strong>ID:</strong> {{ job.job_id }}</p>
+            <p><strong>Prompt:</strong> {{ job.prompt }}</p>
+            
+            {% if job.status == "completed" %}
+                <video controls width="100%" style="margin-top: 20px;">
+                    <source src="/videos/{{ job.job_id }}" type="video/mp4">
+                </video>
+                <p><a href="/videos/{{ job.job_id }}" download="{{ job.job_id }}.mp4">Download Video</a></p>
+            {% elif job.status == "processing" %}
+                <p>🎬 Generating your video... This page will auto-refresh.</p>
+                <script>
+                    // Simple auto-refresh for processing jobs
+                    setTimeout(() => window.location.reload(), 5000);
+                </script>
+            {% elif job.status == "failed" %}
+                <p>❌ Error: {{ job.error_message or "Unknown error" }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

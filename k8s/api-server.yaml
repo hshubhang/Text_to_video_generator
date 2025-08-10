@@ -42,6 +42,15 @@ spec:
             timeoutSeconds: 10        # Timeout after 10s
             successThreshold: 1       # 1 success = healthy
             failureThreshold: 3       # 3 failures = restart pod
+          volumeMounts:
+            - name: video-storage
+              mountPath: /app/videos
+              readOnly: true
+      volumes:
+        - name: video-storage
+          hostPath:
+            path: /mnt/mochi-storage/video-output
+            type: Directory
 ---
 apiVersion: v1
 kind: Service

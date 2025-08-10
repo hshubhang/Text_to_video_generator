@@ -8,6 +8,16 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from fastapi.responses import FileResponse 
+
+from fastapi.templating import Jinja2Templates
+from fastapi import Request, Form
+from fastapi.responses import RedirectResponse
+
+templates = Jinja2Templates(directory="templates")
+
+
+
 
 app = FastAPI(title="Mochi 1 text to video generation API", version="1.0.0")
 
@@ -31,6 +41,7 @@ class JobStatus(BaseModel):
     error_message: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    video_url: Optional[str] = None
 
 redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST", "redis"),
@@ -72,6 +83,9 @@ async def generate_video(request: VideoRequest):
 async def get_status(job_id: str):
     try:
         job_data = get_job_status(job_id)
+
+        if job_data["status"] == "completed":
+            job_data["video_url"] = f"/videos/{job_id}"
         return JobStatus(**job_data)
     except HTTPException:
         raise
@@ -100,5 +114,73 @@ async def health_check():
     except:
         return {"status": "unhealthy", "redis_status": "disconnected"}
 
+@app.get("/videos/{job_id}")
+async def get_video(job_id: str):
+    try:
+        job_data = get_job_status(job_id)
+        if job_data.get("status") != "completed":
+            raise HTTPException(status_code=400, detail="Video is not ready yet or video not found")
+
+        
+        video_filename = f"{job_id}.mp4"
+        
+        video_path = f"/app/videos/{video_filename}"
+
+        if not os.path.exists(video_path):
+            raise HTTPException(status_code=404, detail="Video file not found")
+
+        return FileResponse(
+            path = video_path,
+            media_type="video/mp4",
+            filename=video_filename
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+#Jinja2 code
+
+@app.get("/")
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.post("/submit-video")
+async def submit_video(
+    request: Request,
+    prompt: str = Form(...),
+    duration: int = Form(10),
+    fps: int = Form(8)
+):
+    try:
+        # Use your existing create_job function
+        video_request = VideoRequest(prompt=prompt, duration=duration, fps=fps)
+        job_id = create_job(video_request)
+        return RedirectResponse(url=f"/job/{job_id}", status_code=303)
+    except Exception as e:
+        return templates.TemplateResponse("index.html", {
+            "request": request, 
+            "error": str(e)
+        })
+
+@app.get("/job/{job_id}")
+async def job_status_page(request: Request, job_id: str):
+    try:
+        job_data = get_job_status(job_id)
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "job": job_data
+        })
+    except Exception:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "error": "Job not found"
+        })
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+
+
