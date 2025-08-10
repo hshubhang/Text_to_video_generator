@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mochi-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mochi-api
+  template:
+    metadata:
+      labels:
+        app: mochi-api
+    spec:
+      containers:
+        - name: api
+          image: hshubhang/mochi-api:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+          # Readiness Probe - When pod is ready to receive traffic
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5    # Wait 5s after container starts
+            periodSeconds: 10         # Check every 10s
+            timeoutSeconds: 5         # Timeout after 5s
+            successThreshold: 1       # 1 success = ready
+            failureThreshold: 3       # 3 failures = not ready
+          # Liveness Probe - When to restart the pod
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30   # Wait 30s before first check
+            periodSeconds: 30         # Check every 30s
+            timeoutSeconds: 10        # Timeout after 10s
+            successThreshold: 1       # 1 success = healthy
+            failureThreshold: 3       # 3 failures = restart pod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mochi-api-service
+spec:
+  selector:
+    app: mochi-api
+  ports:
+    - port: 80
+      targetPort: 8000
+  type: LoadBalancer

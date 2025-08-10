@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mochi-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mochi-worker
+  template:
+    metadata:
+      labels:
+        app: mochi-worker
+    spec:
+      containers:
+        - name: worker
+          image: hshubhang/mochi-worker:latest
+          imagePullPolicy: Always
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: HF_HOME
+              value: "/app/hf_cache"
+            - name: OUTPUT_DIR
+              value: "/app/output"
+          volumeMounts:
+            - name: hf-cache-storage
+              mountPath: /app/hf_cache
+            - name: model-weights-storage
+              mountPath: /app/model-weights
+              readOnly: true
+            - name: output-storage
+              mountPath: /app/output
+          resources:
+            requests:
+              nvidia.com/gpu: "2"
+            limits:
+              nvidia.com/gpu: "2"
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -lc
+                - |
+                  test -d /app/model-weights/mochi-1-preview && python3 - << 'PY'
+                  import os, redis
+                  r = redis.Redis(host=os.getenv('REDIS_HOST','redis'), port=int(os.getenv('REDIS_PORT','6379')))
+                  r.ping()
+                  print('ok')
+                  PY
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -lc
+                - |
+                  python3 - << 'PY'
+                  import os, redis
+                  r = redis.Redis(host=os.getenv('REDIS_HOST','redis'), port=int(os.getenv('REDIS_PORT','6379')))
+                  r.ping()
+                  print('ok')
+                  PY
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: hf-cache-storage
+          hostPath:
+            path: /mnt/mochi-storage/hf-cache
+            type: DirectoryOrCreate
+        - name: model-weights-storage
+          hostPath:
+            path: /mnt/mochi-storage/model-weights
+            type: Directory
+        - name: output-storage
+          hostPath:
+            path: /mnt/mochi-storage/video-output
+            type: DirectoryOrCreate
+      nodeSelector:
+        kubernetes.io/hostname: g451
+
+
