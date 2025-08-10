@@ -2,6 +2,8 @@ import os
 import time
 import redis
 import logging
+import torch
+import gc
 from datetime import datetime
 from diffusers.utils import export_to_video
 from model_loader import MochiModelLoader
@@ -55,7 +57,7 @@ class JobProcessor:
             fps = int(job_data.get("fps", 8))
             resolution = job_data.get("resolution", "480p")
             
-            # Cap FPS for safety (V1 limitation)
+            # Cap FPS for safety
             if fps > 24:
                 logger.warning(f"FPS {fps} too high, capping at 24 for V1")
                 fps = 24
@@ -100,6 +102,21 @@ class JobProcessor:
 
         except Exception as e:
             logger.error(f"Failed to process job {job_id}: {e}")
+
+            try:
+
+                logger.info("Cleaning GPU memory after job failure.")
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+                gc.collect()
+
+                for i in range(torch.cuda.device_count()):
+                    allocated_memory = torch.cuda.memory_allocated(i) / 1024 ** 3
+                    logger.info(f"GPU {i} memory after cleanup: {allocated_memory:.1f} GB")
+
+            except Exception as cleanup_error:
+                logger.error(f"Memory cleanup failed: {cleanup_error}")
+
             self.update_job_status(job_id, "failed", error_message=str(e))
 
         
