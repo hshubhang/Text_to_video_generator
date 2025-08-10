@@ -39,6 +39,8 @@ class JobProcessor:
             logger.error(f"Failed to update job {job_id} status: {e}")
 
     def process_job(self, job_id: str):
+
+        start_time = time.time()
         try:
             job_data = self.redis_client.hgetall(f"job:{job_id}")
             if not job_data:
@@ -76,6 +78,8 @@ class JobProcessor:
             videofile_name = f"{job_id}.mp4"
             videofile_path = os.path.join(output_dir, videofile_name)
 
+            duration = time.time() - start_time
+            logger.info(f"Video generation completed in {duration:.2f} seconds")
             logger.info(f"Saving video to {videofile_path}")
             try:
                 export_to_video(frames, videofile_path, fps=fps)

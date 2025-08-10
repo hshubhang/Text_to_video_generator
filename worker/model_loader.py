@@ -2,7 +2,6 @@ import os
 import torch
 import logging
 from diffusers import MochiPipeline
-from diffusers.utils import export_to_video
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +20,8 @@ class MochiModelLoader:
             device_map="balanced"
         )
         
+        self.pipeline.enable_vae_tiling()
+
         logger.info("Mochi pipeline loaded successfully")
         return self.pipeline
     
