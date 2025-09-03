@@ -14,6 +14,92 @@ The system consists of three main components:
 - **Worker**: GPU-powered processing nodes that generate videos using the Mochi model
 - **Redis**: Message queue and job status storage
 
+### System Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "User Interface"
+        WEB["🌐 Web Interface<br/>(HTML/Jinja2)"]
+        API_CLIENT["📱 API Client<br/>(REST)"]
+    end
+    
+    subgraph "API Layer"
+        LB["⚖️ Load Balancer<br/>(Kubernetes Service)"]
+        API["🚀 FastAPI Server<br/>(Port 8000)"]
+    end
+    
+    subgraph "Message Queue"
+        REDIS["📮 Redis<br/>(Job Queue & Status)"]
+    end
+    
+    subgraph "Processing Layer"
+        W1["🔧 Worker 1<br/>(2x GPU)"]
+        W2["🔧 Worker 2<br/>(2x GPU)"]
+        W3["🔧 Worker 3<br/>(2x GPU)"]
+        W4["🔧 Worker 4<br/>(2x GPU)"]
+    end
+    
+    subgraph "Storage"
+        MODEL["🧠 Model Weights<br/>(/mnt/mochi-storage/model-weights)"]
+        VIDEOS["🎬 Video Output<br/>(/mnt/mochi-storage/video-output)"]
+        CACHE["💾 HF Cache<br/>(/mnt/mochi-storage/hf-cache)"]
+    end
+    
+    subgraph "GPU Node (g451)"
+        GPU1["🎮 GPU 1"]
+        GPU2["🎮 GPU 2"]
+        GPU3["🎮 GPU 3"]
+        GPU4["🎮 GPU 4"]
+        GPU5["🎮 GPU 5"]
+        GPU6["🎮 GPU 6"]
+        GPU7["🎮 GPU 7"]
+        GPU8["🎮 GPU 8"]
+    end
+    
+    %% User connections
+    WEB --> LB
+    API_CLIENT --> LB
+    
+    %% Load balancer to API
+    LB --> API
+    
+    %% API interactions
+    API --> REDIS
+    API --> VIDEOS
+    
+    %% Worker connections
+    REDIS --> W1
+    REDIS --> W2
+    REDIS --> W3
+    REDIS --> W4
+    
+    %% Workers to storage
+    W1 --> MODEL
+    W2 --> MODEL
+    W3 --> MODEL
+    W4 --> MODEL
+    
+    W1 --> VIDEOS
+    W2 --> VIDEOS
+    W3 --> VIDEOS
+    W4 --> VIDEOS
+    
+    W1 --> CACHE
+    W2 --> CACHE
+    W3 --> CACHE
+    W4 --> CACHE
+    
+    %% GPU assignments
+    W1 --> GPU1
+    W1 --> GPU2
+    W2 --> GPU3
+    W2 --> GPU4
+    W3 --> GPU5
+    W3 --> GPU6
+    W4 --> GPU7
+    W4 --> GPU8
+```
+
 ## Features
 
 - Text-to-video generation using Mochi 1 model
@@ -108,9 +194,9 @@ GET /health
 
 ### Video Parameters
 
-- **Duration**: 5-10 seconds
+- **Duration**: Upto 10 seconds
 - **FPS**: 8-24 (capped at 24 for safety)
-- **Resolution**: 480p (480x848), 720p (720x1280), 1080p (1080x1920)
+- **Resolution**: 480p (480x848)
 - **Inference Steps**: 64 (fixed for quality)
 
 ### Environment Variables
@@ -144,7 +230,7 @@ GET /health
 ### Model Loading
 - Uses `torch.bfloat16` for memory efficiency
 - Balanced device mapping across GPUs
-- VAE tiling enabled for large resolutions
+- VAE tiling enabled for large frame generation
 
 ### Error Handling
 - Automatic GPU memory cleanup on failures
@@ -181,12 +267,6 @@ kubectl get pods
 # View worker logs
 kubectl logs -f deployment/mochi-worker
 
-# Check GPU usage
-kubectl exec -it <worker-pod> -- nvidia-smi
-
-# Test Redis connection
-kubectl exec -it <api-pod> -- python -c "import redis; r=redis.Redis(); r.ping()"
-```
 
 ## Development
 
@@ -229,7 +309,7 @@ docker build -t hshubhang/mochi-worker:latest .
 
 ## Notes
 
-- The system is configured for a specific GPU node (`g451`) in the worker deployment
+- The system is configured for a specific GPU node in the worker deployment
 - Workers are set to 4 replicas for high throughput
 - Video files are served directly from the API server
 - The web interface includes auto-refresh for job status updates
